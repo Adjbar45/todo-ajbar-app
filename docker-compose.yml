@@ -1,37 +1,34 @@
-version: "3.8"
-
 services:
   db:
-    image: postgres:16
-    restart: always
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: tododb
-      POSTGRES_USER: todouser
-      POSTGRES_PASSWORD: todopass
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${DB_NAME:-tododb}
+      POSTGRES_USER: ${DB_USER:-todouser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-todopass}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todouser -d tododb"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-todouser} -d ${DB_NAME:-tododb}"]
       interval: 5s
-      timeout: 5s
-      retries: 5
+      timeout: 3s
+      retries: 10
+    # No "ports:" on purpose: only the web container can reach the database.
 
   web:
     build: .
-    restart: always
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-tododb}
+      DB_USER: ${DB_USER:-todouser}
+      DB_PASSWORD: ${DB_PASSWORD:-todopass}
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: tododb
-      DB_USER: todouser
-      DB_PASSWORD: todopass
-    ports:
-      - "5000:5000"
 
 volumes:
   pgdata:

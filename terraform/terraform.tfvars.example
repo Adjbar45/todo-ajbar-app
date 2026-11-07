@@ -1,0 +1,6 @@
+# Copy this file to terraform.tfvars and fill in your own values.
+# terraform.tfvars is gitignored — never commit real credentials.
+
+db_password   = "choose-a-strong-password"
+key_pair_name = "your-ec2-key-pair-name"
+my_ip         = "YOUR_PUBLIC_IP/32"
