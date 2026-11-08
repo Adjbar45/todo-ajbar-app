@@ -1,4 +1,6 @@
 import os
+import time
+
 import psycopg2
 from flask import Flask, request, jsonify, render_template
 
@@ -17,19 +19,27 @@ def get_conn():
     return psycopg2.connect(**DB_CONFIG)
 
 
-def init_db():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS todos (
-            id SERIAL PRIMARY KEY,
-            task TEXT NOT NULL,
-            done BOOLEAN DEFAULT FALSE
-        )
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+def init_db(retries=10, delay=2):
+    """Create the table, retrying while the database is still starting."""
+    for attempt in range(1, retries + 1):
+        try:
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS todos (
+                    id SERIAL PRIMARY KEY,
+                    task TEXT NOT NULL,
+                    done BOOLEAN DEFAULT FALSE
+                )
+            """)
+            conn.commit()
+            cur.close()
+            conn.close()
+            return
+        except psycopg2.OperationalError as exc:
+            print(f"DB not ready (attempt {attempt}/{retries}): {exc}", flush=True)
+            time.sleep(delay)
+    raise RuntimeError("Could not connect to the database")
 
 
 @app.route("/")
@@ -95,6 +105,10 @@ def delete_todo(todo_id):
     return "", 204
 
 
+# Runs once at import. Gunicorn is started with --preload, so this happens
+# in the master process before workers fork (no table-creation race).
+init_db()
+
 if __name__ == "__main__":
-    init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Local development only; in the container Gunicorn runs the app.
+    app.run(host="0.0.0.0", port=5000, debug=os.environ.get("FLASK_DEBUG") == "1")
